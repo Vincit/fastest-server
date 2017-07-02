@@ -55,7 +55,7 @@ describe('My app tests', () => {
         // Last visible text input.
         .reverseAt(0).setValue('eggs')
       // Select an element by android id and get its text.
-      .viewByAndroidId('some_id').text().then(text => {
+      .viewById('some_id').text().then(text => {
         console.log(text);
       });
   });
