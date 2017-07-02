@@ -20,7 +20,6 @@ describe('Fastest server', () => {
   class MockAndroidCommandLineTools extends Server.AndroidCommandLineTools {
     execAdb({cmd}) {
       adbCalls.push(cmd);
-      console.log('execAdb:', cmd);
       return Promise.resolve({
         stdout: adbResults.shift(),
         stderr: ''
@@ -28,7 +27,6 @@ describe('Fastest server', () => {
     }
 
     spawn(...args) {
-      console.log('spawn:', ...args);
       spawnCalls.push(args);
     }
   }
@@ -90,7 +88,8 @@ describe('Fastest server', () => {
         deviceName: 'emulator-5554',
         packageName: 'fi.foo.bar',
         avdName: 'super-duper-avd',
-        app: '/path/to/app.apk'
+        app: '/path/to/app.apk',
+        platformVersion: '6.0'
       });
 
       // Response to the `ping` request that determines if the
@@ -148,6 +147,25 @@ describe('Fastest server', () => {
             stdio: 'ignore'
           }
         ]);
+
+        expect(appServer.requests).to.eql([{
+          method: 'GET',
+          path: '/ping',
+          body: {}
+        }, {
+          method: 'POST',
+          path: '/wd/hub/session',
+          body: {
+            desiredCapabilities: {
+              serverUrl: 'http://localhost:4723',
+              deviceName: 'emulator-5554',
+              packageName: 'fi.foo.bar',
+              avdName: 'super-duper-avd',
+              app: '/path/to/app.apk',
+              platformVersion: '6.0'
+            }
+          }
+        }]);
       });
     });
 
@@ -156,7 +174,8 @@ describe('Fastest server', () => {
         serverUrl: `http://localhost:${port}`,
         deviceName: 'emulator-5554',
         packageName: 'fi.foo.bar',
-        app: '/path/to/app.apk'
+        app: '/path/to/app.apk',
+        platformVersion: '6.0'
       });
 
       // Response to the `ping` request that determines if the
@@ -202,6 +221,105 @@ describe('Fastest server', () => {
         ]);
 
         expect(spawnCalls).to.have.length(0);
+
+        expect(appServer.requests).to.eql([{
+          method: 'GET',
+          path: '/ping',
+          body: {}
+        }, {
+          method: 'POST',
+          path: '/wd/hub/session',
+          body: {
+            desiredCapabilities: {
+              serverUrl: 'http://localhost:4723',
+              deviceName: 'emulator-5554',
+              packageName: 'fi.foo.bar',
+              app: '/path/to/app.apk',
+              platformVersion: '6.0'
+            }
+          }
+        }]);
+      });
+    });
+
+    it('should grant missing dangerous permissions', () => {
+      const tester = new Tester({
+        serverUrl: `http://localhost:${port}`,
+        deviceName: 'emulator-5554',
+        packageName: 'fi.foo.bar',
+        app: '/path/to/app.apk',
+        platformVersion: '6.0'
+      });
+
+      // Response to the `ping` request that determines if the
+      // app server is running.
+      appServer.responses = [
+        {}
+      ];
+
+      adbResults = [
+        // devices
+        `List of devices attached
+        emulator-5554 somecrap`,
+
+        // uninstall fi.foo.bar
+        ``,
+
+        // install /path/to/app.apk
+        ``,
+
+        // shell dumpsys package fi.foo.bar
+        `
+          requested permissions:
+          android.permission.RECORD_AUDIO
+          android.permission.USE_SIP
+          install permissions:
+        `,
+
+        // shell pm grant fi.foo.bar android.permission.RECORD_AUDIO
+        ``,
+
+        // shell pm grant fi.foo.bar android.permission.USE_SIP
+        ``,
+
+        // shell monkey -p fi.foo.bar -c android.intent.category.LAUNCHER 1
+        ``,
+
+        // forward tcp:6100 tcp:7100
+        ``,
+      ];
+
+      return tester.init().then(() => {
+        expect(adbCalls).to.eql([ 
+          'devices',
+          'uninstall fi.foo.bar',
+          'install /path/to/app.apk',
+          'shell dumpsys package fi.foo.bar',
+          'shell pm grant fi.foo.bar android.permission.RECORD_AUDIO',
+          'shell pm grant fi.foo.bar android.permission.USE_SIP',
+          'shell monkey -p fi.foo.bar -c android.intent.category.LAUNCHER 1',
+          'forward tcp:6100 tcp:7100'
+        ]);
+
+        expect(spawnCalls).to.have.length(0);
+
+        expect(appServer.requests).to.eql([{
+          method: 'GET',
+          path: '/ping',
+          body: {}
+        }, {
+          method: 'POST',
+          path: '/wd/hub/session',
+          body: {
+            desiredCapabilities: {
+              serverUrl: 'http://localhost:4723',
+              deviceName: 'emulator-5554',
+              packageName: 'fi.foo.bar',
+              app: '/path/to/app.apk',
+              platformVersion: '6.0'
+            }
+          }
+        }]);
       });
     });
 
