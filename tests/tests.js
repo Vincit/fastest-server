@@ -1,3 +1,4 @@
+const uuid = require('uuid');
 const expect = require('expect.js');
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -16,6 +17,8 @@ describe('Fastest server', () => {
 
   let server;
   let appServer;
+
+  const newElementId = () => `element-${uuid.v4()}`;
 
   class MockAndroidCommandLineTools extends Server.AndroidCommandLineTools {
     execAdb({cmd}) {
@@ -72,13 +75,17 @@ describe('Fastest server', () => {
   });
 
   beforeEach(() => {
-    appServer.requests = [];
+    reset();
+  });
+
+  const reset = () => {
     appServer.responses = [];
+    appServer.requests = [];
     
     adbCalls = [];
     adbResults = [];
     spawnCalls = []; 
-  });
+  };
 
   describe('init', () => {
 
@@ -92,10 +99,12 @@ describe('Fastest server', () => {
         platformVersion: '6.0'
       });
 
-      // Response to the `ping` request that determines if the
-      // app server is running.
       appServer.responses = [
-        {}
+        // ping
+        {},
+
+        // session
+        {sessionId: 'session-id'}
       ];
 
       adbResults = [
@@ -251,10 +260,12 @@ describe('Fastest server', () => {
         platformVersion: '6.0'
       });
 
-      // Response to the `ping` request that determines if the
-      // app server is running.
       appServer.responses = [
-        {}
+        // ping
+        {},
+
+        // session
+        {sessionId: 'session-id'}
       ];
 
       adbResults = [
@@ -321,6 +332,193 @@ describe('Fastest server', () => {
           }
         }]);
       });
+    });
+
+  });
+
+  describe('resetApp', () => {
+    let tester;
+
+    beforeEach(() => {
+      appServer.responses = [
+        // ping
+        {},
+
+        // session
+        {sessionId: 'session-id'}
+      ];
+
+      adbResults = [
+        // devices
+        `List of devices attached
+        emulator-5554 somecrap`,
+
+        // uninstall fi.foo.bar
+        ``,
+
+        // install /path/to/app.apk
+        ``,
+
+        // shell dumpsys package fi.foo.bar
+        `
+          requested permissions:
+          android.permission.RECORD_AUDIO
+          android.permission.USE_SIP
+          install permissions:
+        `,
+
+        // shell pm grant fi.foo.bar android.permission.RECORD_AUDIO
+        ``,
+
+        // shell pm grant fi.foo.bar android.permission.USE_SIP
+        ``,
+
+        // shell monkey -p fi.foo.bar -c android.intent.category.LAUNCHER 1
+        ``,
+
+        // forward tcp:6100 tcp:7100
+        ``,
+      ];
+
+      tester = new Tester({
+        serverUrl: `http://localhost:${port}`,
+        deviceName: 'emulator-5554',
+        packageName: 'fi.foo.bar',
+        app: '/path/to/app.apk',
+        platformVersion: '6.0'
+      });
+
+      return tester.init();
+    });
+
+    beforeEach(() => {
+      reset();
+    });
+
+    it('should reset app', () => {
+      appServer.responses = [
+        // ping
+        {}
+      ];
+
+      adbResults = [
+        // shell pm clear fi.foo.bar
+        ``,
+
+        // shell pm grant fi.foo.bar android.permission.RECORD_AUDIO
+        ``,
+
+        // shell pm grant fi.foo.bar android.permission.USE_SIP
+        ``,
+
+        // shell monkey -p fi.foo.bar -c android.intent.category.LAUNCHER 1
+        ``
+      ];
+
+      return tester.resetApp().then(() => {
+        expect(adbCalls).to.eql([ 
+          'shell pm clear fi.foo.bar',
+          'shell pm grant fi.foo.bar android.permission.RECORD_AUDIO',
+          'shell pm grant fi.foo.bar android.permission.USE_SIP',
+          'shell monkey -p fi.foo.bar -c android.intent.category.LAUNCHER 1'
+        ]);
+
+        expect(spawnCalls).to.have.length(0);
+
+        expect(appServer.requests).to.eql([{
+          method: 'GET',
+          path: '/ping',
+          body: {}
+        }, {
+          method: 'POST',
+          path: '/wd/hub/session/session-id/appium/app/reset',
+          body: {}
+        }]);
+      });
+    });
+
+  });
+
+  describe('test methods', () => {
+    let tester;
+
+    beforeEach(() => {
+      appServer.responses = [
+        // ping
+        {},
+
+        // session
+        {sessionId: 'session-id'}
+      ];
+
+      adbResults = [
+        // devices
+        `List of devices attached
+        emulator-5554 somecrap`,
+
+        // uninstall fi.foo.bar
+        ``,
+
+        // install /path/to/app.apk
+        ``,
+
+        // shell dumpsys package fi.foo.bar
+        `
+          requested permissions:
+          android.permission.RECORD_AUDIO
+          android.permission.USE_SIP
+          install permissions:
+        `,
+
+        // shell pm grant fi.foo.bar android.permission.RECORD_AUDIO
+        ``,
+
+        // shell pm grant fi.foo.bar android.permission.USE_SIP
+        ``,
+
+        // shell monkey -p fi.foo.bar -c android.intent.category.LAUNCHER 1
+        ``,
+
+        // forward tcp:6100 tcp:7100
+        ``,
+      ];
+
+      tester = new Tester({
+        serverUrl: `http://localhost:${port}`,
+        deviceName: 'emulator-5554',
+        packageName: 'fi.foo.bar',
+        app: '/path/to/app.apk',
+        platformVersion: '6.0'
+      });
+
+      return tester.init();
+    });
+
+    beforeEach(() => {
+      reset();
+    });
+
+    it('elements', () => {
+      appServer.responses = [
+        {
+          value: [{
+            element: newElementId()
+          }]
+        }
+      ];
+
+      return tester
+        .elementsByXpath('some selector')
+        .then(() => {
+          expect([{ 
+            method: 'POST',
+            path: '/wd/hub/session/session-id/elements',
+            body: {
+              using: 'xpath',
+              value: 'some selector'
+            } 
+          }]);
+        });
     });
 
   });

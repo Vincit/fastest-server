@@ -15,6 +15,12 @@
   "bugs": {
     "url": "https://github.com/Vincit/fastest-server/issues"
   },
+  "files": [
+    "README.md",
+    "LICENSE",
+    "index.js",
+    "lib/*"
+  ],
   "homepage": "https://github.com/Vincit/fastest-server#readme",
   "dependencies": {
     "body-parser": "^1.17.2",
@@ -23,7 +29,8 @@
   },
   "devDependencies": {
     "expect.js": "^0.3.1",
+    "fastest-tester": "github:Vincit/fastest-tester",
     "mocha": "^3.4.2",
-    "fastest-tester": "github:Vincit/fastest-tester"
+    "uuid": "^3.1.0"
   }
 }
